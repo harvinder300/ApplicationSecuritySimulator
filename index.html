@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> Application Security Simulator | SecureNet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(15px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .hero-gradient {
+            background: radial-gradient(circle at top right, #e0e7ff, transparent),
+                radial-gradient(circle at bottom left, #f5f3ff, transparent);
+        }
+
+        .code-keyword {
+            color: #c678dd;
+            font-weight: bold;
+        }
+
+        .code-method {
+            color: #61afef;
+        }
+
+        .code-string {
+            color: #98c379;
+        }
+
+        .code-comment {
+            color: #7f848e;
+            font-style: italic;
+        }
+
+        .xss-output-container h1 {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .xss-output-container {
+            color: #e2e8f0;
+        }
+    </style>
+</head>
+
+<body class="bg-stone-50 text-slate-800 font-sans h-screen flex overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="w-72 bg-white border-r border-stone-200 flex-col hidden md:flex shadow-sm z-20">
+        <div class="p-6 border-b border-stone-100">
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight flex items-center cursor-pointer"
+                onclick="app.showHome()">
+                <i class="fas fa-shield-halved text-indigo-600 mr-2"></i>SecureNet
+            </h1>
+            <p class="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-bold">Defensive Handbook v1.0</p>
+        </div>
+        <div class="p-4 overflow-y-auto">
+            <p class="text-[10px] font-bold text-slate-400 uppercase mb-4 px-3">Vulnerabilities List</p>
+            <nav class="space-y-1" id="nav-container"></nav>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col relative overflow-hidden hero-gradient">
+        <div id="main-scroll" class="flex-1 overflow-y-auto p-4 md:p-12 scroll-smooth">
+
+            <!-- HOME -->
+            <div id="view-home" class="max-w-4xl mx-auto py-20 fade-in text-center">
+                <h1 class="text-6xl font-black text-slate-900 mb-6">Application Security <span
+                        class="text-indigo-600">Simulation</span></h1>
+                <p class="text-xl text-slate-600 mb-10">Interactive playground for .NET Core secure coding patterns and
+                    vulnerability research.</p>
+                <div class="flex justify-center gap-4">
+                    <button onclick="app.showDashboard()"
+                        class="px-8 py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl hover:bg-indigo-600 transition-colors">Launch
+                        Dashboard</button>
+                </div>
+            </div>
+
+            <!-- DASHBOARD -->
+            <div id="view-dashboard" class="max-w-5xl mx-auto hidden fade-in">
+                <div class="flex items-center justify-between mb-10">
+                    <div>
+                        <h2 class="text-4xl font-black text-slate-900">Vulnerabilities Dashboard</h2>
+                        <p class="text-slate-500 mt-2">Master the OWASP Top 10 with 11 live examples.</p>
+                    </div>
+                    <div class="w-32 h-32 bg-white rounded-3xl p-2 border border-stone-200 shadow-sm">
+                        <canvas id="threatChart"></canvas>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="module-grid"></div>
+            </div>
+
+            <!-- MODULE VIEW -->
+            <div id="view-module" class="max-w-5xl mx-auto hidden fade-in">
+                <button onclick="app.showDashboard()"
+                    class="text-indigo-600 text-sm font-bold mb-4 flex items-center group">
+                    <i class="fas fa-chevron-left mr-2 group-hover:-translate-x-1 transition-transform"></i> Dashboard
+                </button>
+
+                <div class="mb-8">
+                    <div class="flex items-center gap-4">
+                        <h2 id="mod-title" class="text-4xl font-black text-slate-900"></h2>
+                        <span id="mod-badge"
+                            class="px-3 py-1 bg-rose-50 text-rose-600 rounded-lg text-[10px] font-black uppercase tracking-widest hidden">New</span>
+                    </div>
+                    <p id="mod-desc" class="text-slate-600 text-lg mt-2 mb-4"></p>
+                    <div id="security-mapping"></div>
+                </div>
+
+                <!-- Simulation Component -->
+                <div class="bg-slate-900 rounded-[2.5rem] overflow-hidden border border-slate-800 shadow-2xl mb-12">
+                    <div class="p-6 bg-slate-800/50 flex justify-between items-center border-b border-slate-700">
+                        <div class="flex items-center gap-4">
+                            <span class="text-white font-bold uppercase tracking-widest text-[10px]">Interactive
+                                Simulation</span>
+                            <div id="sim-counter-pill"
+                                class="hidden px-3 py-1 bg-indigo-500/20 text-indigo-400 rounded-full text-[10px] font-bold border border-indigo-500/30">
+                                Requests: <span id="req-count">0</span> / 3
+                            </div>
+                        </div>
+                        <div class="flex bg-black rounded-xl p-1">
+                            <button onclick="app.setSimMode('vulnerable')" id="btn-vuln"
+                                class="px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all">Vulnerable</button>
+                            <button onclick="app.setSimMode('secure')" id="btn-sec"
+                                class="px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all">Secure</button>
+                        </div>
+                    </div>
+                    <div class="p-8">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div>
+                                <label
+                                    class="text-slate-500 text-[10px] font-black uppercase block mb-3 tracking-widest">Client
+                                    Console</label>
+                                <div id="sim-input-wrapper">
+                                    <textarea id="sim-input"
+                                        class="w-full bg-slate-950 border border-slate-700 text-slate-200 p-5 rounded-2xl font-mono text-sm h-32 focus:border-indigo-500 outline-none transition-colors"
+                                        placeholder="Enter payload..."></textarea>
+                                </div>
+                                <div id="sim-action-container" class="mt-4 flex gap-2">
+                                    <button id="btn-execute" onclick="app.runSimulation()"
+                                        class="flex-1 py-3 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-500 transition-all">Execute
+                                        Request</button>
+                                    <button id="btn-reset" onclick="app.resetSim()"
+                                        class="px-4 py-3 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-700 transition-all">Reset</button>
+                                </div>
+                                <div id="sim-hint" class="text-indigo-400 text-[10px] mt-4 font-bold flex items-center">
+                                    <i class="fas fa-lightbulb mr-2"></i>
+                                    <span id="hint-text"></span>
+                                </div>
+                            </div>
+                            <div>
+                                <label
+                                    class="text-slate-500 text-[10px] font-black uppercase block mb-3 tracking-widest">Server
+                                    Response Log</label>
+                                <div id="sim-output"
+                                    class="w-full bg-black/40 p-5 rounded-2xl font-mono text-xs min-h-[180px] border border-slate-800 text-slate-300 overflow-y-auto max-h-44">
+                                </div>
+                                <div id="sim-status" class="mt-4 flex items-center"></div>
+                            </div>
+                        </div>
+
+                        <!-- Raw Network Traffic -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10">
+                            <div>
+                                <h4 class="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3"
+                                    id="raw-req-title">HTTP Request</h4>
+                                <pre id="raw-request"
+                                    class="bg-black text-green-500 p-4 rounded-xl font-mono text-[10px] overflow-auto h-40 border border-slate-800"></pre>
+                            </div>
+                            <div>
+                                <h4 class="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3"
+                                    id="raw-res-title">HTTP Response</h4>
+                                <pre id="raw-response"
+                                    class="bg-black text-blue-400 p-4 rounded-xl font-mono text-[10px] overflow-auto h-40 border border-slate-800"></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Code Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-20">
+                    <div>
+                        <h3 class="text-rose-600 font-black text-xs uppercase mb-4 tracking-widest">Vulnerable Logic
+                        </h3>
+                        <div class="bg-white border border-rose-100 rounded-3xl p-8 shadow-sm">
+                            <pre id="code-vuln" class="font-mono text-xs whitespace-pre-wrap text-slate-700"></pre>
+                            <div id="vuln-note"
+                                class="mt-6 text-[10px] p-4 bg-rose-50 text-rose-700 rounded-2xl border border-rose-100 font-medium">
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-emerald-600 font-black text-xs uppercase mb-4 tracking-widest">Secure
+                            Implementation</h3>
+                        <div class="bg-white border border-emerald-100 rounded-3xl p-8 shadow-sm">
+                            <pre id="code-sec" class="font-mono text-xs whitespace-pre-wrap text-slate-700"></pre>
+                            <div id="sec-note"
+                                class="mt-6 text-[10px] p-4 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100 font-medium">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+
+
+
+        const handbookData = {
+            modules: [
+                {
+                    id: "ssrf",
+                    title: "SSRF Injection",
+                    icon: "fa-network-wired",
+                    severity: "High",
+                    riskColor: "rose",
+                    isNew: true,
+                    owasp: "A10:2021 – SSRF",
+                    cwe: ["Common Weakness Enumeration - CWE-918"],
+                    description: "Abusing the server to make unauthorized requests to internal resources or external systems.",
+                    vulnerableCode: 'public async Task<IActionResult> Preview(string url)\n{\n    var client = new HttpClient();\n    var result = await client.GetAsync(url);\n    return File(await result.Content.ReadAsByteArrayAsync(), "image/png");\n}',
+                    vulnerableNote: "Accepting a full URL allows attackers to query localhost (127.0.0.1) or cloud metadata (169.254.169.254).",
+                    secureCode: 'public async Task<IActionResult> Preview(string url)\n{\n    var uri = new Uri(url);\n    var allowedHosts = new[] { "trusted-assets.com", "cdn.com" };\n    if (!allowedHosts.Contains(uri.Host)) return BadRequest();\n    \n    // Better: Block internal IP ranges manually if dynamic URLs are needed.\n}',
+                    secureNote: "Use an allowlist of trusted domains and prohibit internal IP addresses (loopback, private ranges).",
+                    simulation: { type: "text", hint: "Try: http://169.254.169.254/latest/meta-data/ (AWS Metadata)" }
+                },
+                {
+                    id: "rate_limit",
+                    title: "Rate Limiting",
+                    icon: "fa-hourglass-half",
+                    severity: "High",
+                    riskColor: "indigo",
+                    owasp: "A04:2021 – Insecure Design",
+                    cwe: ["Common Weakness Enumeration - CWE-770-799"],
+                    description: "Lack of resource limiting allowing for Brute Force, DoS, or credential stuffing attacks.",
+                    vulnerableCode: 'public async Task<IActionResult> Login(LoginModel model)\n{\n    var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, false, false);\n    return Ok(result);\n}',
+                    vulnerableNote: "Attackers can automate thousands of requests per second to guess passwords.",
+                    secureCode: 'app.UseRateLimiter();\nbuilder.Services.AddRateLimiter(o => {\n    o.AddFixedWindowLimiter("login_policy", opt => {\n        opt.Window = TimeSpan.FromSeconds(60);\n        opt.PermitLimit = 5;\n    });\n});',
+                    secureNote: "Implement rate limiting globally or on high-value endpoints like /login.",
+                    simulation: { type: "rate", hint: "Click 'Execute' multiple times rapidly to simulate an attack." }
+                },
+                {
+                    id: "auth_bypass",
+                    title: "Auth Bypass",
+                    icon: "fa-user-ninja",
+                    severity: "Critical",
+                    riskColor: "rose",
+                    owasp: "A07:2021 – Identification & Authentication Failures",
+                    cwe: ["Common Weakness Enumeration - CWE-287-306"],
+                    description: "Bypassing login via hidden 'Debug' flags or custom headers.",
+                    vulnerableCode: 'if (Request.Headers["X-Admin-Bypass"] == "true")\n{\n    return await SignInUser("admin_user");\n}',
+                    vulnerableNote: "Backdoors or debug flags left in production allow complete account takeover.",
+                    secureCode: '[Authorize]\n[ValidateAntiForgeryToken]\npublic async Task<IActionResult> AdminDashboard() { ... }',
+                    secureNote: "Enforce a single point of authentication. Remove all debug flags.",
+                    simulation: { type: "text", hint: 'Try header: "X-Admin-Bypass: true"' }
+                },
+                {
+                    id: "path_traversal",
+                    title: "Path Traversal",
+                    icon: "fa-folder-open",
+                    severity: "High",
+                    riskColor: "rose",
+                    owasp: "A01:2021 – Broken Access Control",
+                    cwe: ["Common Weakness Enumeration - CWE-22"],
+                    description: "Accessing files outside the intended directory using '../' sequences.",
+                    vulnerableCode: 'var filePath = Path.Combine(_rootPath, filename);\nreturn PhysicalFile(filePath, "application/octet-stream");',
+                    vulnerableNote: "An attacker can read /etc/passwd by jumping directories.",
+                    secureCode: 'var fileNameOnly = Path.GetFileName(filename);\nvar filePath = Path.Combine(_rootPath, "safe_dir", fileNameOnly);',
+                    secureNote: "Always strip path information and validate the final destination path.",
+                    simulation: { type: "text", hint: "Try: ../../etc/passwd or ../appsettings.json" }
+                },
+                {
+                    id: "session_hijacking",
+                    title: "Session Hijacking",
+                    icon: "fa-user-secret",
+                    severity: "High",
+                    riskColor: "rose",
+                    owasp: "A07:2021 – Identification & Authentication Failures",
+                    cwe: ["Common Weakness Enumeration - CWE-614-1004"],
+                    description: "Stealing active session tokens due to lack of Secure/HttpOnly flags.",
+                    vulnerableCode: 'options.HttpOnly = false;\noptions.Secure = false;\nResponse.Cookies.Append("SessionId", "12345", options);',
+                    vulnerableNote: "Lack of HttpOnly allows XSS to steal cookies.",
+                    secureCode: 'options.HttpOnly = true; \noptions.Secure = true;   \noptions.SameSite = SameSiteMode.Strict;',
+                    secureNote: "Always use HttpOnly to prevent JS access and Secure to enforce HTTPS.",
+                    simulation: { type: "text", hint: "Try JS snippet: document.cookie" }
+                },
+                {
+                    id: "outdated_components",
+                    title: "Outdated Components",
+                    icon: "fa-triangle-exclamation",
+                    severity: "High",
+                    riskColor: "amber",
+                    owasp: "A06:2021 – Vulnerable and Outdated Components",
+                    cwe: ["Common Weakness Enumeration - CWE-1104"],
+                    description: "Using libraries with known CVEs (e.g., old Newtonsoft.Json versions).",
+                    vulnerableCode: '<PackageReference Include="Newtonsoft.Json" Version="9.0.1" />',
+                    vulnerableNote: "Old package versions contain public exploits like RCE.",
+                    secureCode: '<PackageReference Include="Newtonsoft.Json" Version="13.0.1" />',
+                    secureNote: "Regularly run vulnerability scanners like 'dotnet list package --vulnerable'.",
+                    simulation: { type: "text", hint: "Try: Newtonsoft.Json 9.0.1" }
+                },
+                {
+                    id: "bac",
+                    title: "Access Control",
+                    icon: "fa-id-card-clip",
+                    severity: "High",
+                    riskColor: "rose",
+                    owasp: "A01:2021 – Broken Access Control",
+                    cwe: ["CWE-285", "CWE-639"],
+                    description: "Authenticated users accessing data they don't own (IDOR).",
+                    vulnerableCode: 'return await _context.Accounts.FindAsync(id);',
+                    vulnerableNote: "Only checking if ID exists allows a user to access record #102 even if they only own #101.",
+                    secureCode: 'var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;\nreturn await _context.Accounts.FirstOrDefaultAsync(a => a.Id == id && a.OwnerId == userId);',
+                    secureNote: "Always scope data retrieval to the current authenticated identity.",
+                    simulation: { type: "text", hint: "Change ID: 101 (Your Account) to 102 (Admin Account)" }
+                },
+                {
+                    id: "sqli",
+                    title: "SQL Injection",
+                    icon: "fa-database",
+                    severity: "Critical",
+                    riskColor: "rose",
+                    owasp: "A03:2021 – Injection",
+                    cwe: ["CWE-89"],
+                    description: "Manipulate database queries through untrusted input parameters.",
+                    vulnerableCode: 'string sql = "SELECT * FROM Users WHERE ID = " + id;',
+                    vulnerableNote: "String concatenation allows attackers to bypass login or dump tables.",
+                    secureCode: 'string sql = "SELECT * FROM Users WHERE ID = @id";\ncmd.Parameters.AddWithValue("@id", id);',
+                    secureNote: "Parameterized queries treat all input as literal data.",
+
+                    simulation: {
+                        type: "text",
+                        hint: "Try one payload at a time",
+                        payloads: [
+                            {
+                                name: "Auth Bypass",
+                                value: "1 OR 1=1",
+                                impact: "Bypasses WHERE clause authentication"
+                            },
+                            {
+                                name: "UNION-Based SQLi",
+                                value: "' UNION SELECT username, password FROM users--",
+                                impact: "Extracts data from another table"
+                            },
+                            {
+                                name: "Time-Based Blind SQLi",
+                                value: "' OR SLEEP(5)--",
+                                impact: "Confirms SQL execution via response delay"
+                            }
+                        ]
+                    }
+                },
+                {
+                    id: "xss",
+                    title: "Cross-Site Scripting (XSS)",
+                    icon: "fa-code",
+                    riskColor: "rose",
+                    description: "User input is rendered back to the browser without proper output encoding.",
+                    vulnerableNote:
+                        "User input is directly embedded into the HTML response without output encoding. \
+This allows attackers to inject and execute arbitrary JavaScript in the victim’s browser. \
+Successful exploitation can lead to session hijacking, credential theft, phishing attacks, \
+and complete account takeover.",
+
+                    vulnerableCode:
+                        `public IActionResult Welcome(string name)
+                        {
+                        return Content($"<h1>Welcome {name}</h1>", "text/html");
+                        }`,
+                    secureCode:
+                        `public IActionResult Welcome(string name)
+                        {
+                        var safe = HtmlEncoder.Default.Encode(name);
+                        return Content($"<h1>Welcome {safe}</h1>", "text/html");
+                        }`,
+                    secureNote:
+                        "All user-controlled data is safely encoded before being rendered in the browser. \
+HTML and JavaScript characters are neutralized, ensuring user input is treated as data \
+and never executed as code. This effectively prevents Cross-Site Scripting attacks.",
+                    simulation: {
+                        type: "input",
+                        label: "Name parameter:",
+                        placeholder: "Alex",
+                        hint: "Try XSS payloads like <script>alert('XSS')</scri pt>"
+                    }
+                },
+                
+                {
+                    id: "ssti",
+                    title: "SSTI Injection",
+                    icon: "fa-code",
+                    severity: "High",
+                    riskColor: "rose",
+                    owasp: "A03:2021 – Injection",
+                    cwe: ["Common Weakness Enumeration - CWE-94"],
+                    description: "Server-Side Template Injection via dynamic code execution.",
+                    vulnerableCode: 'string template = $"<h1>Welcome {userName}</h1>";\nreturn await _engine.CompileRenderStringAsync("key", template, model);',
+                    vulnerableNote: "Inputting template tags like {{7*7}} allows remote execution.",
+                    secureCode: 'string template = "<h1>Welcome {{ Name }}</h1>";\nvar model = new { Name = userName };',
+                    secureNote: "Use static templates and pass data through a dedicated object model.",
+                    simulation: { type: "text", hint: "Try: {{7*7}}" }
+                },
+                {
+                    id: "upload",
+                    title: "File Upload",
+                    icon: "fa-file-upload",
+                    severity: "High",
+                    riskColor: "amber",
+                    owasp: "A04:2021 – Insecure Design",
+                    cwe: ["Common Weakness Enumeration - CWE-434"],
+                    description: "Execution of arbitrary code through malicious file uploads.",
+                    vulnerableCode: 'file.SaveAs("/uploads/" + file.FileName);',
+                    vulnerableNote: "Relying on user filename allows scripts like .aspx to be executed.",
+                    secureCode: 'var safeName = Guid.NewGuid() + Path.GetExtension(file.FileName);',
+                    secureNote: "Use a whitelist and rename files to random GUIDs.",
+                    simulation: { type: "upload", hint: "Try: shell.aspx" }
+                },
+                {
+                    id: "jwt",
+                    title: "JWT Security",
+                    icon: "fa-key",
+                    severity: "High",
+                    riskColor: "rose",
+                    owasp: "A02:2021 – Cryptographic Failures",
+                    cwe: ["Common Weakness Enumeration - CWE-345"],
+                    description: "Forging authentication tokens by exploiting weak signature validation.",
+                    vulnerableCode: 'var token = JWT.Decode(data, secret, verify: false);',
+                    vulnerableNote: "verify: false allows attackers to change payload and algorithm.",
+                    secureCode: 'o.TokenValidationParameters = new TokenValidationParameters { ValidateIssuerSigningKey = true };',
+                    secureNote: "Always enforce signature verification.",
+                    simulation: { type: "text", hint: 'Try: {"alg":"none"}' }
+                },
+                {
+                    id: "lfi",
+                    title: "Local File Inclusion (LFI)",
+                    icon: "fa-folder-open",
+                    riskColor: "rose",
+                    severity: "High",
+                    owasp: "A01:2021 – Broken Access Control",
+                    cwe: ["CWE-22 – Path Traversal"],
+
+                    description:
+                        "Local File Inclusion occurs when user-controlled input is used to load files from the server without proper validation, allowing attackers to read sensitive system files.",
+
+                    vulnerableCode:
+                        `public IActionResult ViewFile(string file)
+{
+    var content = System.IO.File.ReadAllText("/var/www/files/" + file);
+    return Content(content);
+}`,
+
+                    vulnerableNote:
+                        "User input is directly concatenated into file paths without validation. Attackers can use directory traversal sequences (../) to read sensitive system files like /etc/passwd or web.config.",
+
+                    secureCode:
+                        `public IActionResult ViewFile(string file)
+{
+    var allowedFiles = new[] { "help.txt", "about.txt" };
+
+    if (!allowedFiles.Contains(file))
+        return Forbid();
+
+    var safePath = Path.Combine("/var/www/files/", file);
+    return Content(System.IO.File.ReadAllText(safePath));
+}`,
+
+                    secureNote:
+                        "Only predefined filenames are allowed (allowlist). Directory traversal characters are never processed, preventing access to unauthorized files.",
+
+                    simulation: {
+                        type: "input",
+                        label: "Filename Parameter:",
+                        placeholder: "help.txt",
+                        hint: "Try: ../../../../etc/passwd or ../web.config"
+                    }
+                }
+
+
+
+
+            ]
+        };
+        /* =========================
+  SECURITY VALIDATORS
+========================= */
+        const validators = {
+
+            sqlInjection(input) {
+                const patterns = [
+                    /\bor\b\s+['"]?\d+['"]?\s*=\s*['"]?\d+/i,
+                    /'\s*--/i,
+                    /--\s*$/i,
+                    /\bunion\b\s+(all\s+)?\bselect\b/i,
+                    /\bsleep\s*\(\s*\d+\s*\)/i,
+                    /\bbenchmark\s*\(/i,
+                    /\bwaitfor\s+delay\b/i
+                ];
+                return patterns.some(rx => rx.test(input));
+            },
+
+            ssti(input) {
+                return /(\{\{.*?\}\}|\{%.*?%\}|<%.*?%>|\$\{.*?\})/s.test(input);
+            },
+
+            authBypass(input) {
+                return /(x-admin-bypass|x-debug|x-auth-bypass)\s*:\s*true/i.test(input);
+            },
+
+            pathTraversal(input) {
+                return /(\.\.(\/|\\))|(%2e%2e%2f)|(%252e%252e)/i.test(input);
+            },
+
+            ssrf(input) {
+                return /(localhost|127\.0\.0\.1|0\.0\.0\.0|169\.254\.169\.254|::1|file:\/\/|gopher:\/\/)/i.test(input);
+            },
+
+            jwtNoneAlg(input) {
+                return /"alg"\s*:\s*"none"/i.test(input);
+            },
+
+            sessionSteal(input) {
+                return /(document\.cookie|localStorage\.getItem|sessionStorage\.getItem)/i.test(input);
+            },
+            xss(input) {
+                return /(<\s*script\b[^>]*>[\s\S]*?<\s*\/\s*script\s*>|on\w+\s*=\s*["']?[^"'>]+["']?|javascript\s*:|<\s*img\b[^>]*>|<\s*svg\b[^>]*>|&lt;\s*script\b)/i.test(input);
+            },
+            lfi(input) {
+                return /(\.\.\/|\.\.\\|\/etc\/passwd|web\.config|windows\/system32)/i.test(input);
+            }
+
+
+
+        };
+
+        /* =========================
+   SAFE SSTI EXPRESSION EVALUATOR
+========================= */
+        function evaluateSSTI(input) {
+            // extract expression inside {{ }}
+            const match = input.match(/{{\s*([^}]+)\s*}}/);
+
+            if (!match) return null;
+
+            const expr = match[1];
+
+            // allow ONLY numbers & math operators
+            if (!/^[0-9+\-*/ ().]+$/.test(expr)) {
+                return "BLOCKED_EXPRESSION";
+            }
+
+            try {
+                // safe math evaluation
+                // eslint-disable-next-line no-new-func
+                return Function(`"use strict"; return (${expr})`)();
+            } catch {
+                return "INVALID_EXPRESSION";
+            }
+        }
+
+        const app = {
+            state: { mode: 'vulnerable', activeId: null, chartInitialized: false, rateCounter: 0 },
+
+            init() {
+                this.renderNav();
+                this.showHome();
+            },
+
+            renderNav() {
+                const container = document.getElementById('nav-container');
+                container.innerHTML = handbookData.modules.map(mod => `
+                    <button onclick="app.loadModule('${mod.id}')" class="w-full text-left px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 mb-1 flex items-center transition-all">
+                        <i class="fas ${mod.icon} w-5 mr-3 text-center"></i> ${mod.title}
+                        ${mod.isNew ? '<span class="ml-auto text-[8px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-md font-bold"></span>' : ''}
+                    </button>
+                `).join('');
+            },
+
+            showHome() { this.hideAll(); document.getElementById('view-home').classList.remove('hidden'); },
+            showDashboard() {
+                this.hideAll();
+                document.getElementById('view-dashboard').classList.remove('hidden');
+                this.renderDashboard();
+                setTimeout(() => this.initChart(), 50);
+            },
+            hideAll() { ['view-home', 'view-dashboard', 'view-module'].forEach(id => document.getElementById(id).classList.add('hidden')); },
+
+            renderDashboard() {
+                document.getElementById('module-grid').innerHTML = handbookData.modules.map(mod => `
+                    <div onclick="app.loadModule('${mod.id}')" class="bg-white p-6 rounded-[2rem] border border-stone-200 shadow-sm cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all group">
+                        <div class="w-12 h-12 rounded-2xl bg-${mod.riskColor}-50 text-${mod.riskColor}-600 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform"><i class="fas ${mod.icon} text-lg"></i></div>
+                        <div class="flex items-center gap-2">
+                            <h4 class="font-bold text-slate-900 text-lg">${mod.title}</h4>
+                            ${mod.isNew ? '<span class="text-[8px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-md font-bold">NEW</span>' : ''}
+                        </div>
+                        <p class="text-xs text-slate-500 mt-2 line-clamp-2">${mod.description}</p>
+                    </div>
+                `).join('');
+            },
+
+            loadModule(id) {
+                const mod = handbookData.modules.find(m => m.id === id);
+                this.state.activeId = id;
+                this.resetSim();
+                this.hideAll();
+                document.getElementById('view-module').classList.remove('hidden');
+
+                document.getElementById('mod-title').innerText = mod.title;
+                document.getElementById('mod-desc').innerText = mod.description;
+                document.getElementById('hint-text').innerText = mod.simulation.hint;
+                document.getElementById('mod-badge').classList.toggle('hidden', !mod.isNew);
+
+                document.getElementById('security-mapping').innerHTML = `
+                    <div class="flex gap-3 flex-wrap mt-4">
+                        <span class="px-4 py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-[11px] font-bold border border-indigo-100">${mod.owasp}</span>
+                        ${(mod.cwe || []).map(c => `<span class="px-4 py-1.5 bg-slate-100 text-slate-600 rounded-full text-[11px] font-bold border border-slate-200">${c}</span>`).join('')}
+                    </div>`;
+                const wrapper = document.getElementById('sim-input-wrapper');
+                wrapper.innerHTML =
+                    '<label class="text-[10px] ...">' + mod.simulation.label + '</label>' +
+                    '<input id="sim-input" type="text" placeholder="' + mod.simulation.placeholder + '" ... >';
+
+                const inputWrapper = document.getElementById('sim-input-wrapper');
+                if (mod.id === 'rate_limit') {
+                    inputWrapper.innerHTML = `<div class="bg-slate-950 p-6 rounded-2xl border border-slate-700 text-slate-400 font-mono text-xs">
+                        $ curl -X POST /api/login \\<br>
+                        &nbsp;&nbsp;&nbsp;-d '{"user":"admin"}'
+                    </div><input type="hidden" id="sim-input" value="login_attempt">`;
+                    document.getElementById('sim-counter-pill').classList.remove('hidden');
+                } else if (mod.id === 'upload') {
+                    inputWrapper.innerHTML = `<input id="sim-input" type="text" class="w-full bg-slate-950 border border-slate-700 text-slate-200 p-5 rounded-2xl font-mono text-sm" placeholder="filename.aspx" />`;
+                    document.getElementById('sim-counter-pill').classList.add('hidden');
+                } else if (mod.id === 'ssrf') {
+                    inputWrapper.innerHTML = `<input id="sim-input" type="text" class="w-full bg-slate-950 border border-slate-700 text-slate-200 p-5 rounded-2xl font-mono text-sm" placeholder="http://trusted-cdn.com/logo.png" />`;
+                    document.getElementById('sim-counter-pill').classList.add('hidden');
+
+
+                } else {
+                    inputWrapper.innerHTML = `<textarea id="sim-input" class="w-full bg-slate-950 border border-slate-700 text-slate-200 p-5 rounded-2xl font-mono text-sm h-32" placeholder="Enter payload..."></textarea>`;
+                    document.getElementById('sim-counter-pill').classList.add('hidden');
+                }
+
+                document.getElementById('code-vuln').innerHTML = this.highlightCode(mod.vulnerableCode);
+                document.getElementById('code-sec').innerHTML = this.highlightCode(mod.secureCode);
+                document.getElementById('vuln-note').innerText = mod.vulnerableNote;
+                document.getElementById('sec-note').innerText = mod.secureNote;
+
+                this.setSimMode('vulnerable');
+            },
+
+            setSimMode(mode) {
+                this.state.mode = mode;
+                document.getElementById('btn-vuln').className = mode === 'vulnerable' ? 'px-4 py-1.5 rounded-lg text-[10px] font-black uppercase bg-rose-600 text-white' : 'px-4 py-1.5 rounded-lg text-[10px] font-black uppercase text-slate-500 hover:text-white';
+                document.getElementById('btn-sec').className = mode === 'secure' ? 'px-4 py-1.5 rounded-lg text-[10px] font-black uppercase bg-emerald-600 text-white' : 'px-4 py-1.5 rounded-lg text-[10px] font-black uppercase text-slate-500 hover:text-white';
+                this.resetSim();
+            },
+
+            resetSim() {
+                this.state.rateCounter = 0;
+                document.getElementById('req-count').innerText = "0";
+                document.getElementById('sim-output').innerHTML = "";
+                document.getElementById('sim-status').innerHTML = "";
+                document.getElementById('raw-request').innerText = "";
+                document.getElementById('raw-response').innerText = "";
+            },
+
+            runSimulation() {
+                const mod = handbookData.modules.find(m => m.id === this.state.activeId);
+                const input = document.getElementById('sim-input').value;
+                const output = document.getElementById('sim-output');
+                const status = document.getElementById('sim-status');
+                const reqEl = document.getElementById('raw-request');
+                const resEl = document.getElementById('raw-response');
+
+                let resStatus = "200 OK";
+                let resBody = "";
+                let logMsg = "";
+
+                if (mod.id === 'ssrf') {
+
+                    const exploited = validators.ssrf(input);
+
+                    if (this.state.mode === 'vulnerable' && exploited) {
+                        resBody =
+                            `AWS Metadata Service
+                        --------------------
+                        ami-id: ami-123456
+                        iam-role: AdminRole`;
+
+                        status.innerHTML =
+                            `<span class="w-2 h-2 bg-rose-500 mr-2 rounded-full"></span> SSRF EXPLOITED`;
+                    }
+                    else if (this.state.mode === 'secure' && exploited) {
+                        resStatus = "400 Bad Request";
+                        resBody = "Blocked internal IP access.";
+                    }
+                    else {
+                        resBody = "External resource fetched safely.";
+                    }
+                }
+
+                if (mod.id === 'bac') {
+                    if (this.state.mode === 'vulnerable') {
+                        if (input === '102') {
+                            resBody = '{"id": 102, "owner": "Admin", "balance": "$9,999,999", "ssn": "XXX-XX-0000"}';
+                            statusHtml = `<span class="w-2 h-2 bg-rose-500 mr-2 rounded-full"></span> IDOR EXPLOITED (Accessed Record #102)`;
+                        } else {
+                            resBody = `{"id": ${input}, "owner": "Yourself", "balance": "$50"}`;
+                        }
+                    } else {
+                        if (input === '102') {
+                            resStatus = "403 Forbidden";
+                            resBody = '{"error": "Access Denied. You do not own this record."}';
+                            statusHtml = `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> BLOCKED (Identity Check Applied)`;
+                        } else {
+                            resBody = `{"id": ${input}, "owner": "Yourself", "balance": "$50"}`;
+                        }
+                    }
+                }
+                else if (mod.id === 'rate_limit') {
+                    this.state.rateCounter++;
+                    document.getElementById('req-count').innerText = this.state.rateCounter;
+                    if (this.state.mode === 'secure' && this.state.rateCounter > 3) {
+                        resStatus = "429 Too Many Requests";
+                        resBody = '{"error": "Rate limit exceeded."}';
+                        logMsg = `<div class="text-emerald-400">Blocked: 429 Too Many Requests</div>`;
+                    } else {
+                        resBody = '{"status": "Auth Failed"}';
+                        logMsg = `<div>Request ${this.state.rateCounter} processed.</div>`;
+                    }
+                    output.innerHTML += logMsg;
+                }
+                else if (mod.id === 'auth_bypass') {
+
+                    const exploited = validators.authBypass(input);
+
+                    if (this.state.mode === 'vulnerable' && exploited) {
+                        resBody =
+                            `[+] Custom Header Detected
+                        [+] Authentication Skipped
+                        [+] User logged in as ADMIN`;
+
+                        status.innerHTML =
+                            `<span class="w-2 h-2 bg-rose-500 mr-2 rounded-full"></span> AUTH BYPASS EXPLOITED`;
+                    }
+                    else {
+                        resStatus = "401 Unauthorized";
+                        resBody = "Authentication required. Header ignored.";
+                        status.innerHTML =
+                            `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> PROTECTED`;
+                    }
+                }
+                else if (mod.id === 'xss') {
+
+                    const exploited = validators.xss(input);
+
+                    if (this.state.mode === 'vulnerable') {
+
+                        // Vulnerable rendering (raw HTML execution)
+                        resBody =
+                            `<div class="xss-output-container">
+                <h1>Welcome</h1>
+                ${input || 'Guest'}
+            </div>`;
+
+                        if (exploited) {
+                            status.innerHTML =
+                                `<span class="w-2 h-2 bg-rose-500 mr-2 rounded-full"></span> XSS EXECUTED`;
+
+                            // Trigger fake browser alert if payload contains alert()
+                            const alertMatch = input.match(/alert\s*\((.*?)\)/i);
+                            if (alertMatch) {
+                                setTimeout(() => {
+                                    alert(alertMatch[1]?.replace(/['"]/g, '') || 'XSS Triggered');
+                                }, 300);
+                            }
+                        } else {
+                            status.innerHTML =
+                                `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> INPUT RENDERED`;
+                        }
+
+                    } else {
+                        // Secure rendering (HTML encoded)
+                        const encoded = input
+                            .replace(/&/g, "&amp;")
+                            .replace(/</g, "&lt;")
+                            .replace(/>/g, "&gt;")
+                            .replace(/"/g, "&quot;")
+                            .replace(/'/g, "&#039;");
+
+                        resBody =
+                            `<div class="xss-output-container">
+                <h1>Welcome</h1>
+                ${encoded || 'Guest'}
+            </div>`;
+
+                        status.innerHTML =
+                            `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> XSS BLOCKED`;
+                    }
+                }
+
+
+                else if (mod.id === 'path_traversal') {
+
+                    const exploited = validators.pathTraversal(input);
+
+                    if (this.state.mode === 'vulnerable' && exploited) {
+                        resBody =
+                            `root:x:0:0:root:/root:/bin/bash
+                        daemon:x:1:1:/usr/sbin:/usr/sbin/nologin`;
+
+                        status.innerHTML =
+                            `<span class="w-2 h-2 bg-rose-500 mr-2 rounded-full"></span> PATH TRAVERSAL EXPLOITED`;
+                    }
+                    else {
+                        resStatus = "403 Forbidden";
+                        resBody = "Invalid file path.";
+                    }
+                }
+
+                else if (mod.id === 'ssti') {
+
+                    const exploited = validators.ssti(input);
+
+                    // detect dangerous functions
+                    const isDumpAttempt = /dump\s*\(|var_dump\s*\(|debug\s*\(/i.test(input);
+
+                    if (this.state.mode === 'vulnerable' && exploited) {
+
+                        if (isDumpAttempt) {
+                            resBody =
+                                `Template Engine Debug Output
+----------------------------
+Application Context Dump
+
+Environment: Production
+Debug: Enabled
+Database:
+  Host: prod-db.internal
+  User: app_user
+  Password: ********
+
+SECURITY ISSUE: Internal objects exposed`;
+
+                        } else {
+                            const result = evaluateSSTI(input);
+                            resBody =
+                                `Template Engine Output
+----------------------
+Expression evaluated
+Result: ${result}`;
+                        }
+
+                        status.innerHTML =
+                            `<span class="w-2 h-2 bg-rose-500 mr-2 rounded-full"></span> SSTI EXPLOITED`;
+
+                    } else {
+
+                        resBody = "Template rendering blocked or safely escaped.";
+                        status.innerHTML =
+                            `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> TEMPLATE SAFE`;
+                    }
+                }
+
+
+
+
+                else if (mod.id === 'sqli') {
+
+                    const exploited = validators.sqlInjection(input);
+
+                    if (this.state.mode === 'vulnerable' && exploited) {
+                        resBody =
+                            `[+] SQL Injection Detected
+                             [+] WHERE clause bypassed
+                             [+] Dumping users table...
+
+                            id | username | role
+                            --------------------
+                            1  | admin    | ADMIN
+                            2  | user1    | USER`;
+
+                        status.innerHTML =
+                            `<span class="w-2 h-2 bg-rose-500 mr-2 rounded-full"></span> SQL INJECTION SUCCESS`;
+                    }
+                    else {
+                        resBody = "Query executed safely. No records found.";
+                        status.innerHTML =
+                            `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> QUERY SAFE`;
+                    }
+                }
+
+                else if (mod.id === 'jwt') {
+                    if (this.state.mode === 'vulnerable' && input.includes('"alg":"none"')) {
+                        resBody = "Token Accepted: Role set to ADMIN (Algorithm: none exploited)."; isExploit = true;
+                    } else {
+                        resStatus = "401 Unauthorized"; resBody = "Invalid token signature.";
+                    }
+                }
+                else if (mod.id === 'session_hijacking') {
+                    if (this.state.mode === 'vulnerable' && input.includes('document.cookie')) {
+                        resBody = "ALERT: Cookie Exfiltrated!\nSessionId=12345; Path=/; Domain=securenet.local";
+                        statusHtml = `<span class="w-2 h-2 bg-rose-500 mr-2 rounded-full"></span> SESSION STOLEN`;
+                    } else if (this.state.mode === 'secure' && input.includes('document.cookie')) {
+                        resBody = "Cookie Access: [Empty/Filtered]\n(HttpOnly prevents JS access)";
+                        statusHtml = `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> PROTECTED`;
+                    } else {
+                        resBody = "Request processed.";
+                    }
+                }
+                else if (mod.id === 'outdated_components') {
+                    if (this.state.mode === 'vulnerable' && input.toLowerCase().includes('newtonsoft.json 9.0.1')) {
+                        resBody = "CVE-2017-15708 DETECTED:\nPackage Newtonsoft.Json 9.0.1 is vulnerable to RCE via Object Injection.";
+                        statusHtml = `<span class="w-2 h-2 bg-rose-500 mr-2 rounded-full"></span> VULNERABILITY FOUND`;
+                    } else if (this.state.mode === 'secure') {
+                        resBody = "Package List Scanned: All versions within support lifecycle.";
+                        statusHtml = `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> SCAN CLEAN`;
+                    } else {
+                        resBody = "Scan complete. No critical issues found for user input.";
+                    }
+                } else if (mod.id === 'lfi') {
+
+                    const exploited = validators.lfi(input);
+
+                    if (this.state.mode === 'vulnerable' && exploited) {
+                        resBody =
+                            `root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin`;
+
+                        status.innerHTML =
+                            `<span class="w-2 h-2 bg-rose-500 mr-2 rounded-full"></span> LFI EXPLOITED`;
+                    }
+                    else if (this.state.mode === 'secure' && exploited) {
+                        resBody =
+                            `Access denied.
+Requested file is not on the allowlist.`;
+
+                        status.innerHTML =
+                            `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> LFI BLOCKED`;
+                    }
+                    else {
+                        resBody =
+                            `File loaded successfully.
+Contents of ${input || "help.txt"}`;
+
+                        status.innerHTML =
+                            `<span class="w-2 h-2 bg-slate-400 mr-2 rounded-full"></span> NORMAL FILE ACCESS`;
+                    }
+                }
+
+
+                else {
+                    resBody = "Standard simulation response generated.";
+                }
+
+                if (mod.id !== 'rate_limit') output.innerHTML = resBody;
+                reqEl.innerText = `POST /api/${mod.id} HTTP/1.1\nHost: securenet.local\n\n${input}`;
+                resEl.innerText = `HTTP/1.1 ${resStatus}\nDate: ${new Date().toUTCString()}\n\n${resBody}`;
+            },
+
+            highlightCode(code) {
+                return code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                    .replace(/\b(public|class|void|string|var|return|if|else|new|async|Task|await|IActionResult|HttpGet|Authorize|ValidateAntiForgeryToken|app|context|next|true|User|ClaimTypes|FindFirst|Value|CookieOptions|Response|SameSiteMode|PackageReference|Include|Version|builder|Services|AddRateLimiter|UseRateLimiter|Uri|HttpClient|Contains|File)\b/g, '<span class="code-keyword">$1</span>')
+                    .replace(/(\.[A-Z][a-zA-Z0-9_]*)\b/g, '<span class="code-method">$1</span>')
+                    .replace(/(\"[^\"]*\")/g, '<span class="code-string">$1</span>');
+
+            },
+
+            initChart() {
+                if (this.state.chartInitialized) return;
+                const canvas = document.getElementById('threatChart');
+                new Chart(canvas, {
+                    type: 'radar',
+                    data: {
+                        labels: ['Inj', 'Auth', 'Ctrl', 'Data', 'Audit'],
+                        datasets: [{
+                            data: [10, 10, 9, 10, 8],
+                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                            borderColor: '#6366f1',
+                            borderWidth: 2,
+                            pointRadius: 0
+                        }]
+                    },
+                    options: { scales: { r: { display: false, min: 0, max: 10 } }, plugins: { legend: { display: false } } }
+                });
+                this.state.chartInitialized = true;
+            }
+        };
+
+        window.onload = () => app.init();
+    </script>
+</body>
+
+</html>
