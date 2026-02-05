@@ -116,7 +116,7 @@
                 <div class="flex items-center justify-between mb-10">
                     <div>
                         <h2 class="text-4xl font-black text-slate-900">Vulnerabilities Dashboard</h2>
-                        <p class="text-slate-500 mt-2">Master the OWASP Top 10 with 11 live examples.</p>
+                        <p class="text-slate-500 mt-2">Master the OWASP Top 10 with 13 live examples.</p>
                     </div>
                     <div class="w-32 h-32 bg-white rounded-3xl p-2 border border-stone-200 shadow-sm">
                         <canvas id="threatChart"></canvas>
@@ -240,8 +240,7 @@
     </main>
 
     <script>
-
-
+      
 
         const handbookData = {
             modules: [
@@ -421,7 +420,7 @@ and never executed as code. This effectively prevents Cross-Site Scripting attac
                         hint: "Try XSS payloads like <script>alert('XSS')</scri pt>"
                     }
                 },
-                
+
                 {
                     id: "ssti",
                     title: "SSTI Injection",
@@ -592,7 +591,38 @@ and never executed as code. This effectively prevents Cross-Site Scripting attac
             } catch {
                 return "INVALID_EXPRESSION";
             }
+        }  function analyzeSSRF(url) {
+            try {
+                const parsed = new URL(url);
+                const host = parsed.hostname;
+
+                // Metadata services
+                if (host === "169.254.169.254") {
+                    return { risky: true, reason: "Cloud metadata service detected" };
+                }
+
+                // Localhost
+                if (host === "localhost" || host === "127.0.0.1") {
+                    return { risky: true, reason: "Localhost access detected" };
+                }
+
+                // Private IP ranges
+                if (
+                    /^10\./.test(host) ||
+                    /^192\.168\./.test(host) ||
+                    /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+                ) {
+                    return { risky: true, reason: "Private network IP detected" };
+                }
+
+                return { risky: false, reason: "External public resource" };
+
+            } catch {
+                return { risky: true, reason: "Invalid URL format" };
+            }
         }
+
+
 
         const app = {
             state: { mode: 'vulnerable', activeId: null, chartInitialized: false, rateCounter: 0 },
@@ -667,8 +697,12 @@ and never executed as code. This effectively prevents Cross-Site Scripting attac
                     inputWrapper.innerHTML = `<input id="sim-input" type="text" class="w-full bg-slate-950 border border-slate-700 text-slate-200 p-5 rounded-2xl font-mono text-sm" placeholder="filename.aspx" />`;
                     document.getElementById('sim-counter-pill').classList.add('hidden');
                 } else if (mod.id === 'ssrf') {
-                    inputWrapper.innerHTML = `<input id="sim-input" type="text" class="w-full bg-slate-950 border border-slate-700 text-slate-200 p-5 rounded-2xl font-mono text-sm" placeholder="http://trusted-cdn.com/logo.png" />`;
-                    document.getElementById('sim-counter-pill').classList.add('hidden');
+                    inputWrapper.innerHTML = `
+    <input id="sim-input"
+      class="w-full bg-slate-950 border border-slate-700 text-slate-200 p-5 rounded-2xl font-mono text-sm"
+      placeholder="http://trusted-cdn.com/logo.png"
+      value="http://169.254.169.254/latest/meta-data/"
+    />`;
 
 
                 } else {
@@ -713,27 +747,64 @@ and never executed as code. This effectively prevents Cross-Site Scripting attac
                 let logMsg = "";
 
                 if (mod.id === 'ssrf') {
+                    const result = analyzeSSRF(input);
 
-                    const exploited = validators.ssrf(input);
+                    if (this.state.mode === 'vulnerable') {
+                        if (result.risky) {
+                            resBody =
+                                `🚨 SSRF EXPLOITED
 
-                    if (this.state.mode === 'vulnerable' && exploited) {
-                        resBody =
-                            `AWS Metadata Service
-                        --------------------
-                        ami-id: ami-123456
-                        iam-role: AdminRole`;
+Target URL:
+${input}
 
-                        status.innerHTML =
-                            `<span class="w-2 h-2 bg-rose-500 mr-2 rounded-full"></span> SSRF EXPLOITED`;
-                    }
-                    else if (this.state.mode === 'secure' && exploited) {
-                        resStatus = "400 Bad Request";
-                        resBody = "Blocked internal IP access.";
+Reason:
+${result.reason}
+
+Response:
+[Internal service response simulated]`;
+
+                            status.innerHTML =
+                                `<span class="w-2 h-2 bg-rose-500 mr-2 rounded-full"></span> SSRF EXPLOITED`;
+                        } else {
+                            resBody =
+                                `✅ Request successful
+
+Fetched resource from:
+${input}`;
+
+                            status.innerHTML =
+                                `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> REQUEST OK`;
+                        }
                     }
                     else {
-                        resBody = "External resource fetched safely.";
+                        if (result.risky) {
+                            resBody =
+                                `🛡️ REQUEST BLOCKED
+
+Target URL:
+${input}
+
+Blocked Reason:
+${result.reason}
+
+Security Control:
+URL allowlist + IP filtering enforced`;
+
+                            status.innerHTML =
+                                `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> SSRF BLOCKED`;
+                        } else {
+                            resBody =
+                                `✅ External request allowed
+
+Fetched safely from:
+${input}`;
+
+                            status.innerHTML =
+                                `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> REQUEST OK`;
+                        }
                     }
                 }
+
 
                 if (mod.id === 'bac') {
                     if (this.state.mode === 'vulnerable') {
@@ -954,7 +1025,37 @@ Result: ${result}`;
                     } else {
                         resBody = "Scan complete. No critical issues found for user input.";
                     }
-                } else if (mod.id === 'lfi') {
+                } else if (mod.id === 'ssrf') {
+                    const exploited = validators.ssrf(input);
+
+                    if (this.state.mode === 'vulnerable' && exploited) {
+                        resBody =
+                            "🚨 SSRF EXPLOITED\n\n" +
+                            "Internal resource accessed:\n" +
+                            input;
+
+                        status.innerHTML =
+                            `<span class="w-2 h-2 bg-rose-500 mr-2 rounded-full"></span> SSRF EXPLOITED`;
+                    }
+                    else if (this.state.mode === 'secure' && exploited) {
+                        resBody =
+                            "🛡️ REQUEST BLOCKED\n\n" +
+                            "Target URL resolved to a prohibited internal address.";
+
+                        status.innerHTML =
+                            `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> SSRF BLOCKED`;
+                    }
+                    else {
+                        resBody =
+                            "✅ External request completed successfully.";
+
+                        status.innerHTML =
+                            `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> REQUEST OK`;
+                    }
+                }
+
+
+                else if (mod.id === 'lfi') {
 
                     const exploited = validators.lfi(input);
 
