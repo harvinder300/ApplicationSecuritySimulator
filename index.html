@@ -366,7 +366,7 @@
 
                     simulation: {
                         type: "text",
-                        hint: "Try one payload at a time",
+                        hint: "1 OR 1=1 ,' OR SLEEP(5)--",
                         payloads: [
                             {
                                 name: "Auth Bypass",
@@ -435,7 +435,7 @@ and never executed as code. This effectively prevents Cross-Site Scripting attac
                     vulnerableNote: "Inputting template tags like {{7*7}} allows remote execution.",
                     secureCode: 'string template = "<h1>Welcome {{ Name }}</h1>";\nvar model = new { Name = userName };',
                     secureNote: "Use static templates and pass data through a dedicated object model.",
-                    simulation: { type: "text", hint: "Try: {{7*7}}" }
+                    simulation: { type: "text", hint: "Try: {{7*7}} or {{6*6}}}" }
                 },
                 {
                     id: "upload",
@@ -450,7 +450,7 @@ and never executed as code. This effectively prevents Cross-Site Scripting attac
                     vulnerableNote: "Relying on user filename allows scripts like .aspx to be executed.",
                     secureCode: 'var safeName = Guid.NewGuid() + Path.GetExtension(file.FileName);',
                     secureNote: "Use a whitelist and rename files to random GUIDs.",
-                    simulation: { type: "upload", hint: "Try: shell.aspx" }
+                    simulation: { type: "upload", hint: "Try: shell.aspx or shell.php" }
                 },
                 {
                     id: "jwt",
@@ -1289,3 +1289,4 @@ Contents of ${input || "help.txt"}`;
 </body>
 
 </html>
+
