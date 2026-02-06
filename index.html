@@ -240,7 +240,7 @@
     </main>
 
     <script>
-      
+
 
         const handbookData = {
             modules: [
@@ -457,16 +457,49 @@ and never executed as code. This effectively prevents Cross-Site Scripting attac
                     title: "JWT Security",
                     icon: "fa-key",
                     severity: "High",
-                    riskColor: "rose",
-                    owasp: "A07:2025 – Authentication Failures",
-                    cwe: ["Common Weakness Enumeration - CWE-345"],
-                    description: "Forging authentication tokens by exploiting weak signature validation.",
-                    vulnerableCode: 'var token = JWT.Decode(data, secret, verify: false);',
-                    vulnerableNote: "verify: false allows attackers to change payload and algorithm.",
-                    secureCode: 'o.TokenValidationParameters = new TokenValidationParameters { ValidateIssuerSigningKey = true };',
-                    secureNote: "Always enforce signature verification.",
-                    simulation: { type: "text", hint: 'Try: {"alg":"none"}' }
-                },
+                    riskColor: "amber",
+                    owasp: "A02:2021 – Cryptographic Failures",
+                    cwe: ["CWE-321: Hard-coded Cryptographic Key", "CWE-347: Improper Verification of JWT"],
+                    description: "Weak JWT secrets allow attackers to forge tokens and escalate privileges.",
+                    vulnerableCode: `
+var token = new JwtSecurityToken(
+    issuer,
+    audience,
+    claims,
+    expires: DateTime.Now.AddHours(1),
+    signingCredentials: new SigningCredentials(
+        new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes("secret")
+        ),
+        SecurityAlgorithms.HmacSha256
+    )
+);`,
+                    secureCode: `
+var key = new byte[64];
+RandomNumberGenerator.Fill(key);
+
+var signingKey = new SymmetricSecurityKey(key);
+
+var token = new JwtSecurityToken(
+    issuer,
+    audience,
+    claims,
+    expires: DateTime.Now.AddMinutes(15),
+    signingCredentials: new SigningCredentials(
+        signingKey,
+        SecurityAlgorithms.HmacSha256
+    )
+);`,
+                    vulnerableNote: "Using short or guessable HMAC secrets allows attackers to brute-force the key and sign arbitrary tokens.",
+                    secureNote: "Use long, randomly generated secrets or asymmetric algorithms like RS256.",
+                    simulation: {
+                        type: "textarea",
+                        label: "JWT Token:",
+                        placeholder: "Paste JWT here",
+                        hint: "Try weak-secret signed token or change role to admin using HS256"
+                    }
+                }
+                ,
                 {
                     id: "lfi",
                     title: "Local File Inclusion (LFI)",
@@ -592,7 +625,7 @@ and never executed as code. This effectively prevents Cross-Site Scripting attac
             } catch {
                 return "INVALID_EXPRESSION";
             }
-        }  function analyzeSSRF(url) {
+        } function analyzeSSRF(url) {
             try {
                 const parsed = new URL(url);
                 const host = parsed.hostname;
@@ -825,6 +858,79 @@ ${input}`;
                         }
                     }
                 }
+                else if (mod.id === 'upload') {
+
+                    const filename = input || "file.txt";
+                    const ext = filename.split('.').pop().toLowerCase();
+                    const dangerousExt = ['aspx', 'php', 'jsp', 'exe', 'sh'];
+                    const isDangerous = dangerousExt.includes(ext);
+
+                    if (this.state.mode === 'vulnerable') {
+
+                        if (isDangerous) {
+                            resBody =
+                                `🚨 FILE UPLOAD EXPLOITED
+
+Uploaded File:
+${filename}
+
+Result:
+Malicious file executed on server.
+
+Impact:
+Remote Code Execution possible.`;
+
+                            status.innerHTML =
+                                `<span class="w-2 h-2 bg-rose-500 mr-2 rounded-full"></span> MALICIOUS FILE EXECUTED`;
+                        } else {
+                            resBody =
+                                `✅ File uploaded successfully
+
+Filename:
+${filename}
+
+Note:
+File stored without validation.`;
+
+                            status.innerHTML =
+                                `<span class="w-2 h-2 bg-slate-400 mr-2 rounded-full"></span> FILE UPLOADED`;
+                        }
+
+                    } else {
+                        // SECURE MODE
+                        if (isDangerous) {
+                            resStatus = "400 Bad Request";
+                            resBody =
+                                `🛡️ UPLOAD BLOCKED
+
+Filename:
+${filename}
+
+Reason:
+Dangerous file extension not allowed.
+
+Allowed:
+.jpg, .png, .pdf`;
+
+                            status.innerHTML =
+                                `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> UPLOAD BLOCKED`;
+                        } else {
+                            resBody =
+                                `✅ Secure upload successful
+
+Stored as:
+${crypto.randomUUID()}.${ext}
+
+Security Controls:
+• Extension allowlist
+• Filename randomization`;
+
+                            status.innerHTML =
+                                `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> SAFE UPLOAD`;
+                        }
+                    }
+                }
+
                 else if (mod.id === 'rate_limit') {
                     this.state.rateCounter++;
                     document.getElementById('req-count').innerText = this.state.rateCounter;
@@ -999,12 +1105,64 @@ Result: ${result}`;
                 }
 
                 else if (mod.id === 'jwt') {
-                    if (this.state.mode === 'vulnerable' && input.includes('"alg":"none"')) {
-                        resBody = "Token Accepted: Role set to ADMIN (Algorithm: none exploited)."; isExploit = true;
+
+                    const isAdmin = /"role"\s*:\s*"admin"/i.test(input);
+                    const isAttacker = /"user"\s*:\s*"attacker"/i.test(input);
+
+                    if (this.state.mode === 'vulnerable') {
+
+                        if (isAdmin) {
+                            resBody =
+                                `🚨 JWT FORGERY SUCCESS
+
+Algorithm: HS256
+Weak secret used.
+
+Decoded Claims:
+{
+  "user": "attacker",
+  "role": "admin"
+}
+
+Impact:
+Privilege escalation successful.`;
+
+                            status.innerHTML =
+                                `<span class="w-2 h-2 bg-rose-500 mr-2 rounded-full"></span> TOKEN FORGED`;
+                        } else {
+                            resBody = "JWT accepted. No elevated privileges requested.";
+                        }
+
                     } else {
-                        resStatus = "401 Unauthorized"; resBody = "Invalid token signature.";
+                        // 🔒 SECURE MODE
+                        if (isAdmin && isAttacker) {
+                            resStatus = "401 Unauthorized";
+                            resBody =
+                                `🛡️ TOKEN REJECTED
+
+Reason:
+• Signature verification failed
+• Token forged without valid key
+
+Security:
+Strong secret enforced`;
+
+                            status.innerHTML =
+                                `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> INVALID TOKEN`;
+                        } else {
+                            resBody =
+                                `JWT validated successfully.
+
+Claims verified.
+Signature trusted.`;
+
+                            status.innerHTML =
+                                `<span class="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></span> TOKEN VALID`;
+                        }
                     }
                 }
+
+
                 else if (mod.id === 'session_hijacking') {
                     if (this.state.mode === 'vulnerable' && input.includes('document.cookie')) {
                         resBody = "ALERT: Cookie Exfiltrated!\nSessionId=12345; Path=/; Domain=securenet.local";
@@ -1131,4 +1289,3 @@ Contents of ${input || "help.txt"}`;
 </body>
 
 </html>
-
